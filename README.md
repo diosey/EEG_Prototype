@@ -11,7 +11,7 @@ Developed as a degree project at Universidad Politécnica Territorial de Aragua 
 
 This project implements a complete EEG acquisition system composed of:
 
-- **Analog front-end**: Low-noise biopotential acquisition circuit with instrumental amplifier, eight-order active filter with butterworth topology, non-inverting adder for an offset to adapt the signal to logical level required for ADC and microcontroller, notch filter to mitigate the 60Hz noise 
+- **Analog front-end**: Low-noise biopotential acquisition circuit with instrumentation amplifier, eighth-order active filter with butterworth topology, non-inverting adder for an offset to adapt the signal to logical level required for ADC and microcontroller, notch filter to mitigate the 60Hz noise 
 - **Digital processing**: ESP32 microcontroller with websockets for communication
 - **Wireless communication**: WiFi for real-time data streaming
 - **Web interface**: Browser-based visualization of EEG signals in time and frequency domains with FIR and IIR digital filters
@@ -26,7 +26,7 @@ The system captures brain electrical activity on the ESP32, streams raw 16-bit s
 |-----------|-------|
 | Signal type | Brain electrical activity (EEG) |
 | Channels | 1 |
-|Biopotential amplifier | G = 10000|
+|Biopotential amplifier | G = 10000 |
 | Sampling rate | 430 Hz |
 | ADC resolution | 16 bits |
 | Microcontroller | ESP32 |
