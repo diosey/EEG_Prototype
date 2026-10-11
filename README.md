@@ -83,8 +83,6 @@ Features:
 - Real-time time-domain plot
 - Real-time frequency-domain plot (power spectrum)
 - Filter selection (FIR/IIR, LP/HP)
-- [Otras características]
-
 
 ---
 
