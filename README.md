@@ -16,7 +16,7 @@ This project implements a complete EEG acquisition system composed of:
 - **Wireless communication**: WiFi for real-time data streaming
 - **Web interface**: Browser-based visualization of EEG signals in time and frequency domains with FIR and IIR digital filters
 
-The system captures brain electrical activity on the ESP32, streams raw 16-bit samples over WebSocket, and applies digital filtering (31-tap FIR with Hamming window, 1st-order IIR, both low-pass and high-pass) in the browser for real-time visualization in the time and frequency domains.The system captures brain electrical activity, applies digital filtering (31-tap FIR with Hamming window, 1st-order IIR, both with low-pass and high-pass configurations), and streams the processed data wirelessly to any device with a web browser.
+The system captures brain electrical activity on the ESP32, streams raw 16-bit samples over WebSocket, and applies digital filtering (31-tap FIR with Hamming window, 1st-order IIR, both low-pass and high-pass) in the browser for real-time visualization in the time and frequency domains.
 
 ---
 
@@ -26,7 +26,7 @@ The system captures brain electrical activity on the ESP32, streams raw 16-bit s
 |-----------|-------|
 | Signal type | Brain electrical activity (EEG) |
 | Channels | 1 |
-|Biopotential amp|G = 10000|
+|Biopotential amplifier|G = 10000|
 | Sampling rate | 430 Hz |
 | ADC resolution | 16 bits |
 | Microcontroller | ESP32 |
