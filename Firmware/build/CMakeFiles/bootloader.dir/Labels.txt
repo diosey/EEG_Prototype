@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/CMakeFiles/bootloader
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/CMakeFiles/bootloader.rule
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/CMakeFiles/bootloader-complete.rule
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+C:/ESPRESSIFIDF/EEG_VER8_15_04_2026_UI/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule

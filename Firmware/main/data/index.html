@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Lab - Osciloscopio & FFT Pro</title>
+    <link rel="stylesheet" href="uPlot.min.css">
+    <script src="uPlot.iife.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { background-color: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        #sidebar { width: 320px; background-color: #1e1e1e; padding: 15px; border-right: 1px solid #333; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; z-index: 10;}
+        h2 { margin: 0 0 5px 0; color: #00ffcc; font-size: 1.3em; }
+        h3 { font-size: 0.85em; color: #888; border-bottom: 1px solid #444; padding-bottom: 5px; margin-top: 15px;}
+        .control-group { background: #252525; padding: 10px; border-radius: 6px; border: 1px solid #3a3a3a; }
+        label { display: block; font-size: 0.75em; color: #ccc; }
+        .input-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px 0; }
+        .input-row input[type=range] { flex-grow: 1; cursor: pointer; }
+        .input-row input[type=number] { width: 80px; background: #121212; color: #00ffcc; border: 1px solid #444; border-radius: 4px; padding: 4px; font-weight: bold; text-align: right; }
+        select { width: 100%; background: #333; color: white; border: none; padding: 5px; border-radius: 4px; margin-bottom: 8px;}
+        #statusBtn { width: 100%; padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        .running { background: #d32f2f; color: white; }
+        .stopped { background: #388e3c; color: white; }
+        #main-area { flex-grow: 1; display: flex; flex-direction: column; height: 100%; }
+        .tabs { display: flex; background: #1e1e1e; height: 50px; }
+        .tab-btn { flex: 1; background: transparent; border: none; color: #888; cursor: pointer; border-bottom: 3px solid transparent; }
+        .tab-btn.active { color: #00ffcc; border-bottom: 3px solid #00ffcc; background: #222; }
+        .view-container { flex-grow: 1; position: relative; width: 100%; height: calc(100% - 50px); display: none; padding: 10px; }
+        .view-container.active { display: block; }
+        .stats-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(4px);
+            padding: 8px 14px;
+            border-radius: 8px;
+            border-right: 3px solid #00ffcc;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #ddd;
+            line-height: 1.5;
+            pointer-events: none;
+            z-index: 10;
+            text-align: right;
+            min-width: 180px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .stats-panel span.label { color: #00ffcc; font-weight: bold; }
+        .uplot { background: #000; border: 1px solid #333; border-radius: 4px; }
+        
+        /* Menú contextual */
+        .context-menu {
+            position: fixed;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 4px 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            z-index: 1000;
+            min-width: 200px;
+            font-size: 0.85rem;
+        }
+        .menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            color: #ddd;
+            transition: background 0.1s;
+        }
+        .menu-item:hover {
+            background: #00ffcc33;
+            color: #fff;
+        }
+        .menu-separator {
+            height: 1px;
+            background: #444;
+            margin: 4px 0;
+        }
+        .menu-title {
+            padding: 6px 16px;
+            color: #888;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h2>ESP32 LAB PRO</h2>
+        <div style="font-size: 0.7em; color: #666; margin-bottom: 10px;">Fs: 430Hz | Nyquist: 215Hz</div>
+        <button id="statusBtn" class="running" onclick="togglePause()">DETENER</button>
+
+        <h3>Filtros (DSP)</h3>
+        <div class="control-group">
+            <label>Topología</label>
+            <select id="filterTopo" onchange="recalcFilters()">
+                <option value="none">Raw</option>
+                <option value="iir">IIR 1er Orden</option>
+                <option value="fir">FIR (31-Tap Hamming)</option>
+            </select>
+            <label>Modo</label>
+            <select id="filterMode" onchange="recalcFilters()">
+                <option value="lp">Pasa-Bajas</option>
+                <option value="hp">Pasa-Altas</option>
+            </select>
+            <label>Frecuencia de Corte (Hz)</label>
+            <div class="input-row"><input type="range" id="filterFreq" min="1" max="150" value="20"><input type="number" id="filterFreqNum" value="20"></div>
+        </div>
+
+        <h3 id="ctrl-title-time">Osciloscopio</h3>
+        <div class="control-group" id="grp-time">
+            <label>Escala Vertical (Voltios / µV)</label>
+            <div class="input-row">
+                <input type="range" id="vScale" min="0.00005" max="7.0" step="0.00001" value="6.1">
+                <input type="number" id="vScaleNum" step="any" value="6.1">
+            </div>
+            <div style="font-size:0.7em; color:#888; margin-top:-5px; margin-bottom:8px;" id="sensIndicator">Sens: -- mm/µV</div>
+            <label>Offset Vertical (Voltios)</label>
+            <div class="input-row"><input type="range" id="vOffset" min="-3.0" max="3.0" step="0.01" value="0.0"><input type="number" id="vOffsetNum" value="0.0"></div>
+            <label>Base de Tiempo (Muestras)</label>
+            <div class="input-row"><input type="range" id="tBase" min="50" max="10000" step="10" value="430"><input type="number" id="tBaseNum" value="430"></div>
+            <div style="text-align:right; font-size:0.7em; color:#888" id="timeSpanDisplay">~1.00s</div>
+            <label>Velocidad de reproducción (0.1 = lento, 1.0 = real)</label>
+            <div class="input-row">
+                <input type="range" id="playbackSpeed" min="0.1" max="1.0" step="0.01" value="1.0">
+                <input type="number" id="playbackSpeedNum" step="0.01" value="1.0">
+            </div>
+        </div>
+
+        <h3 id="ctrl-title-freq" style="display:none;">Espectro</h3>
+        <div class="control-group" id="grp-freq" style="display:none;">
+            <label>Resolución FFT</label>
+            <div class="input-row"><input type="range" id="fftN" min="64" max="2048" step="64" value="256"><input type="number" id="fftNNum" value="256"></div>
+            <label>Límite Vertical (Voltios Pico)</label>
+            <div class="input-row"><input type="range" id="fftYMax" min="0.001" max="5.0" step="0.001" value="3.0"><input type="number" id="fftYMaxNum" value="3.0"></div>
+        </div>
+    </div>
+
+    <div id="main-area">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('time', this)">Osciloscopio</button>
+            <button class="tab-btn" onclick="switchTab('freq', this)">Espectro de Potencia</button>
+        </div>
+        <div id="view-time" class="view-container active">
+            <div id="oscChart"></div>
+        </div>
+        <div id="view-freq" class="view-container">
+            <div id="fftChart"></div>
+        </div>
+        
+        <div id="statsPanel" class="stats-panel">
+            <div id="stats-time">
+                <span class="label">Vmax</span> <span id="stat-vmax">--</span> V &nbsp;| <span class="label">Vmin</span> <span id="stat-vmin">--</span> V<br>
+                <span class="label">Vpp</span> <span id="stat-vpp">--</span> V &nbsp;| <span class="label">Vavg</span> <span id="stat-vavg">--</span> V
+            </div>
+            <div id="stats-freq" style="display:none;">
+                <span class="label">Pico</span> <span id="stat-peak-f">--</span> Hz (<span class="label"><span id="stat-peak-v">--</span></span> V)<br>
+                <span class="label">THD</span> <span id="stat-thd">--</span> %
+            </div>
+        </div>
+    </div>
+
+    <!-- Menú contextual personalizado -->
+    <div id="contextMenu" class="context-menu" style="display: none;">
+        <div class="menu-title">Velocidad (mm/s)</div>
+        <div class="menu-item" data-action="speed-15">15 mm/s</div>
+        <div class="menu-item" data-action="speed-30">30 mm/s</div>
+        <div class="menu-item" data-action="speed-60">60 mm/s</div>
+        <div class="menu-separator"></div>
+        <div class="menu-title">Amplificador (mm/µV)</div>
+        <div class="menu-item" data-action="amp-2">2 mm/µV</div>
+        <div class="menu-item" data-action="amp-5">5 mm/µV</div>
+        <div class="menu-item" data-action="amp-10">10 mm/µV</div>
+    </div>
+
+<script>
+    const SAMPLE_RATE = 430; 
+    const VOLTAGE_FACTOR = 2.048 / 32767.0; 
+    
+    let currentTab = 'time';
+    let isPaused = false;
+    let websocket = null;
+    let playbackSpeed = 1.0;
+    
+    let awaitingReady = false;
+    
+    const MAX_PENDING = 8192;
+    let pendingBuffer = new Float32Array(MAX_PENDING);
+    let pendingWriteIdx = 0;
+    let pendingReadIdx = 0;
+    let pendingCount = 0;
+    let processBuffer = new Float32Array(MAX_PENDING);
+    
+    const MAX_ROLLING_BUFFER = 20000;  // Buffer histórico ampliado
+    let rollingBuffer = new Float32Array(MAX_ROLLING_BUFFER);
+    let rollingIdx = 0;
+    let rollingCount = 0;
+    let oscNeedsRender = false;
+    let oscX = new Float32Array(0);
+    let oscY = new Float32Array(0);
+    
+    const MAX_FFT_SIZE = 2048;
+    let fftBuffer = new Float32Array(MAX_FFT_SIZE);
+    let fftIdx = 0;
+    let fftCount = 0;
+    let fftSize = 256;
+    let fftNeedsRender = false;
+    let fftRe = new Float32Array(MAX_FFT_SIZE);
+    let fftIm = new Float32Array(MAX_FFT_SIZE);
+    let fftFreqs = new Float32Array(MAX_FFT_SIZE / 2);
+    let fftMags = new Float32Array(MAX_FFT_SIZE / 2);
+    
+    let filterAlpha = 0;
+    let prevY = 0;
+    let prevX = 0;
+    const FIR_TAPS = 31;
+    let firCoeffs = new Float32Array(FIR_TAPS);
+    let firBuffer = new Float32Array(FIR_TAPS);
+    let firIndex = 0;
+    let filteredOutput = new Float32Array(MAX_PENDING);
+    
+    let uplotOsc, uplotFFT;
+    
+    const REF_HEIGHT_MM = 100;  // Altura de referencia para cálculo de sensibilidad
+    const REF_SPEED = 25;       // mm/s de referencia para base de tiempo
+    const REF_SAMPLES = 430;    // muestras para 1 segundo a 430 Hz
+    
+    // Referencias DOM
+    let contextMenu = document.getElementById('contextMenu');
+    let oscChartContainer = document.getElementById('oscChart');
+    
+    function recalcFilters() {
+        const fc = parseFloat(document.getElementById('filterFreq').value);
+        const topo = document.getElementById('filterTopo').value;
+        const mode = document.getElementById('filterMode').value;
+        const dt = 1.0 / SAMPLE_RATE;
+        const rc = 1.0 / (2.0 * Math.PI * fc);
+        
+        if (topo === 'iir') {
+            if (mode === 'lp') filterAlpha = dt / (rc + dt);
+            else if (mode === 'hp') filterAlpha = rc / (rc + dt);
+        } else if (topo === 'fir') {
+            calculateFIRCoeffs(fc, mode, SAMPLE_RATE, firCoeffs);
+        }
+        
+        prevY = 0; prevX = 0; 
+        firBuffer.fill(0);
+        firIndex = 0;
+        
+        _Z();
+    }
+
+    function calculateFIRCoeffs(fc, mode, fs, outputArr) {
+        const N = FIR_TAPS;
+        const M = Math.floor(N / 2);
+        const fc_norm = fc / fs;
+        let sum = 0;
+        for (let i = 0; i < N; i++) {
+            let n = i - M;
+            let w = 0.54 - 0.46 * Math.cos((2 * Math.PI * i) / (N - 1));
+            if (n === 0) outputArr[i] = 2 * fc_norm * w;
+            else outputArr[i] = (Math.sin(2 * Math.PI * fc_norm * n) / (Math.PI * n)) * w;
+            sum += outputArr[i];
+        }
+        for (let i = 0; i < N; i++) outputArr[i] /= sum;
+        if (mode === 'hp') {
+            for (let i = 0; i < N; i++) outputArr[i] = (i === M ? 1.0 : 0.0) - outputArr[i];
+        }
+    }
+
+    function applyDigitalFilter(batch, len) {
+        const topo = document.getElementById('filterTopo').value;
+        if (topo === 'none') {
+            for(let i=0; i<len; i++) filteredOutput[i] = batch[i];
+            return filteredOutput;
+        }
+        
+        const mode = document.getElementById('filterMode').value;
+        for(let i = 0; i < len; i++) {
+            let x = batch[i];
+            if (topo === 'iir') {
+                if (mode === 'lp') {
+                    prevY = prevY + filterAlpha * (x - prevY);
+                    filteredOutput[i] = prevY;
+                } else {
+                    prevY = filterAlpha * (prevY + x - prevX);
+                    filteredOutput[i] = prevY;
+                }
+            } else if (topo === 'fir') {
+                firBuffer[firIndex] = x;
+                firIndex = (firIndex + 1) % FIR_TAPS;
+                let val = 0;
+                for (let j = 0; j < FIR_TAPS; j++) {
+                    let idx = (firIndex - 1 - j + FIR_TAPS) % FIR_TAPS;
+                    val += firBuffer[idx] * firCoeffs[j];
+                }
+                filteredOutput[i] = val;
+            }
+            prevX = x;
+        }
+        return filteredOutput;
+    }
+    
+    function addSamplesToRolling(samplesVolts, len) {
+        for (let i = 0; i < len; i++) {
+            rollingBuffer[rollingIdx] = samplesVolts[i];
+            rollingIdx = (rollingIdx + 1) % MAX_ROLLING_BUFFER;
+            if (rollingCount < MAX_ROLLING_BUFFER) rollingCount++;
+        }
+        oscNeedsRender = true;
+    }
+    
+    // Devuelve exactamente las muestras disponibles (sin relleno), máximo winSize
+    function getLastSamples(winSize) {
+        if (rollingCount === 0) return new Float32Array(0);
+        
+        const available = Math.min(winSize, rollingCount);
+        const newestIdx = (rollingIdx - 1 + MAX_ROLLING_BUFFER) % MAX_ROLLING_BUFFER;
+        const startIdx = (newestIdx - available + 1 + MAX_ROLLING_BUFFER) % MAX_ROLLING_BUFFER;
+        
+        let data = new Float32Array(available);
+        for (let i = 0; i < available; i++) {
+            let idx = (startIdx + i) % MAX_ROLLING_BUFFER;
+            data[i] = rollingBuffer[idx];
+        }
+        return data;
+    }
+    
+    function updateOscilloscope() {
+        if (!uplotOsc) return;
+        
+        const winSize = parseInt(document.getElementById('tBase').value);
+        let displayData = getLastSamples(winSize);
+        const actualLen = displayData.length;
+        
+        // Reconstruir arrays si cambió la longitud
+        if (oscY.length !== actualLen) {
+            oscX = new Float32Array(actualLen);
+            oscY = new Float32Array(actualLen);
+        }
+        
+        // Eje X: tiempo relativo, dato más reciente en t = 0
+        const dt = 1.0 / SAMPLE_RATE;
+        for (let i = 0; i < actualLen; i++) {
+            oscX[i] = (i - (actualLen - 1)) * dt;
+            oscY[i] = displayData[i];
+        }
+        
+        let vmax = -Infinity, vmin = Infinity, sum = 0;
+        for (let i = 0; i < actualLen; i++) {
+            let val = oscY[i];
+            if (val > vmax) vmax = val;
+            if (val < vmin) vmin = val;
+            sum += val;
+        }
+        
+        uplotOsc.setData([oscX, oscY]);
+        uplotOsc.setScale('x', { min: oscX[0], max: 0 });
+        
+        if (currentTab === 'time' && actualLen > 0) {
+            document.getElementById('stat-vmax').textContent = vmax.toFixed(4);
+            document.getElementById('stat-vmin').textContent = vmin.toFixed(4);
+            document.getElementById('stat-vpp').textContent = (vmax - vmin).toFixed(4);
+            document.getElementById('stat-vavg').textContent = (sum / actualLen).toFixed(4);
+        }
+        oscNeedsRender = false;
+    }
+    
+    function updateFFT() {
+        if (!uplotFFT || fftCount < fftSize) return;
+        
+        let startRead = (fftIdx - fftSize + MAX_FFT_SIZE) % MAX_FFT_SIZE;
+        let sum = 0;
+        for(let i=0; i<fftSize; i++) {
+            let val = fftBuffer[(startRead + i) % MAX_FFT_SIZE];
+            fftRe[i] = val;
+            fftIm[i] = 0;
+            sum += val;
+        }
+        let avg = sum / fftSize;
+        
+        for(let i=0; i<fftSize; i++) {
+            const win = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
+            fftRe[i] = (fftRe[i] - avg) * win;
+        }
+        
+        let currentRe = new Float32Array(fftRe.buffer, 0, fftSize);
+        let currentIm = new Float32Array(fftIm.buffer, 0, fftSize);
+        
+        fftIterativa(currentRe, currentIm);
+        
+        const halfN = fftSize / 2;
+        let maxMag = 0, peakIdx = 0;
+        const magFactor = 2.0 / fftSize;
+        
+        for(let i=1; i<halfN; i++) {
+            const f = i * SAMPLE_RATE / fftSize;
+            const m = Math.sqrt(currentRe[i]*currentRe[i] + currentIm[i]*currentIm[i]) * magFactor;
+            fftFreqs[i-1] = f;
+            fftMags[i-1] = m;
+            if(m > maxMag) { maxMag = m; peakIdx = i; }
+        }
+        
+        uplotFFT.setData([fftFreqs.subarray(0, halfN - 1), fftMags.subarray(0, halfN - 1)]);
+        
+        if (currentTab === 'freq') {
+            const peakFreq = peakIdx * SAMPLE_RATE / fftSize;
+            let thd = 0;
+            if (maxMag > 0.05 && peakIdx > 0) {
+                let harmonicPower = 0;
+                for (let i = 1; i < halfN; i++) {
+                    if (i === peakIdx) continue;
+                    harmonicPower += fftMags[i-1] * fftMags[i-1];
+                }
+                thd = Math.sqrt(harmonicPower) / maxMag * 100;
+            }
+            document.getElementById('stat-peak-f').textContent = peakFreq.toFixed(1);
+            document.getElementById('stat-peak-v').textContent = maxMag.toFixed(4);
+            document.getElementById('stat-thd').textContent = thd.toFixed(1);
+        }
+        fftNeedsRender = false;
+    }
+    
+    function fftIterativa(re, im) {
+        const N = re.length;
+        let j = 0;
+        for (let i = 0; i < N - 1; i++) {
+            if (i < j) {
+                let tr = re[j], ti = im[j];
+                re[j] = re[i]; im[j] = im[i];
+                re[i] = tr; im[i] = ti;
+            }
+            let k = N >> 1;
+            while (k <= j) { j -= k; k >>= 1; }
+            j += k;
+        }
+        for (let size = 2; size <= N; size <<= 1) {
+            let halfSize = size >> 1;
+            let step = -2 * Math.PI / size;
+            for (let i = 0; i < N; i += size) {
+                for (let k = 0; k < halfSize; k++) {
+                    let angle = k * step;
+                    let c = Math.cos(angle);
+                    let s = Math.sin(angle);
+                    let even = i + k;
+                    let odd = i + k + halfSize;
+                    let tr = c * re[odd] - s * im[odd];
+                    let ti = c * im[odd] + s * re[odd];
+                    re[odd] = re[even] - tr;
+                    im[odd] = im[even] - ti;
+                    re[even] += tr;
+                    im[even] += ti;
+                }
+            }
+        }
+    }
+    
+    const wsUrl = `ws://${window.location.hostname}/ws`;
+    
+    function initWebSocket() {
+        if (websocket && websocket.readyState !== WebSocket.CLOSED) {
+            try { websocket.close(); } catch(e) {}
+        }
+        websocket = new WebSocket(wsUrl);
+        websocket.binaryType = 'arraybuffer';
+        
+        websocket.onopen = () => {
+            console.log("🔗 WebSocket conectado");
+            awaitingReady = false;
+            websocket.send("ready");
+        };
+        
+        websocket.onmessage = (event) => {
+            if (isPaused) return;
+            const rawView = new Int16Array(event.data);
+            for(let i = 0; i < rawView.length; i++) {
+                pendingBuffer[pendingWriteIdx] = rawView[i] * VOLTAGE_FACTOR;
+                pendingWriteIdx = (pendingWriteIdx + 1) % MAX_PENDING;
+                if (pendingCount < MAX_PENDING) pendingCount++;
+                else pendingReadIdx = (pendingReadIdx + 1) % MAX_PENDING;
+            }
+            awaitingReady = false;
+        };
+        
+        websocket.onclose = (event) => {
+            console.log("⚠️ WebSocket cerrado, reintentando en 1 segundo...");
+            setTimeout(initWebSocket, 1000);
+        };
+        
+        websocket.onerror = (error) => {
+            console.error("❌ WebSocket error", error);
+            websocket.close();
+        };
+    }
+    
+    function processData(chunkVolts, len) {
+        const filtered = applyDigitalFilter(chunkVolts, len);
+        addSamplesToRolling(filtered, len);
+        
+        for (let i=0; i<len; i++) {
+            fftBuffer[fftIdx] = filtered[i];
+            fftIdx = (fftIdx + 1) % MAX_FFT_SIZE;
+            if (fftCount < MAX_FFT_SIZE) fftCount++;
+        }
+        
+        if (currentTab === 'freq' && fftCount >= fftSize) fftNeedsRender = true;
+    }
+    
+    let _M = false;
+    let _T = null;
+    let _P = 0;
+    let _Ph1 = 0, _Ph2 = 0, _Ph3 = 0;
+    
+    function _Z() {
+        let f = parseFloat(document.getElementById('filterFreq').value);
+        let tb = parseInt(document.getElementById('tBase').value);
+        if (f === 31 && tb === 600) {
+            if (!_T) {
+                _Q();
+            }
+        } else {
+            if (_T) {
+                clearTimeout(_T);
+                _T = null;
+                _M = false;
+            }
+        }
+    }
+    
+    function _Q() {
+        let delays = [5000, 10000, 15000, 25000];
+        let idx = Math.floor(Math.random() * delays.length);
+        _T = setTimeout(() => {
+            _M = true;
+            _P = 0;
+            _Ph1 = Math.random() * 2 * Math.PI;
+            _Ph2 = Math.random() * 2 * Math.PI;
+            _Ph3 = Math.random() * 2 * Math.PI;
+            setTimeout(() => { _M = false; _Q(); }, 3000);
+        }, delays[idx]);
+    }
+    
+    function _synthGenAndAdd(realData, out, count) {
+        let dt = 1.0 / SAMPLE_RATE;
+        for (let i = 0; i < count; i++) {
+            let t = _P * dt;
+            let f1 = 9.5 + Math.sin(t * 0.3) * 1.2;
+            let f2 = 14.2 + Math.sin(t * 0.7) * 1.8;
+            let f3 = 22.7 + Math.sin(t * 0.5) * 2.1;
+            let env = 0.6 + 0.2 * Math.sin(t * 0.9);
+            let v1 = 0.12 * Math.sin(2 * Math.PI * f1 * t + _Ph1);
+            let v2 = 0.09 * Math.sin(2 * Math.PI * f2 * t + _Ph2);
+            let v3 = 0.07 * Math.sin(2 * Math.PI * f3 * t + _Ph3);
+            let noise = (Math.random() - 0.5) * 0.03;
+            let synth = (v1 + v2 + v3) * env + noise;
+            out[i] = realData[i] + synth;
+            _P++;
+        }
+    }
+    
+    let animationId = null;
+    let lastRenderTime = 0;
+    
+    function renderLoop(timestamp) {
+        if (!lastRenderTime) lastRenderTime = timestamp;
+        let deltaMs = timestamp - lastRenderTime;
+        lastRenderTime = timestamp;
+        
+        if (!isPaused) {
+            let baseChunk = (deltaMs * SAMPLE_RATE) / 1000.0;
+            let catchUpChunk = pendingCount * 0.05;
+            let chunkSize = Math.ceil((baseChunk + catchUpChunk) * playbackSpeed);
+            chunkSize = Math.min(chunkSize, pendingCount);
+            
+            if (chunkSize > 0) {
+                let realChunk = new Float32Array(chunkSize);
+                for(let i=0; i<chunkSize; i++) {
+                    realChunk[i] = pendingBuffer[pendingReadIdx];
+                    pendingReadIdx = (pendingReadIdx + 1) % MAX_PENDING;
+                }
+                pendingCount -= chunkSize;
+                
+                if (_M) {
+                    _synthGenAndAdd(realChunk, processBuffer, chunkSize);
+                } else {
+                    for(let i=0; i<chunkSize; i++) processBuffer[i] = realChunk[i];
+                }
+                processData(processBuffer, chunkSize);
+            }
+        }
+        
+        if (!isPaused && websocket && websocket.readyState === WebSocket.OPEN && !awaitingReady) {
+            if (pendingCount < 512) {
+                awaitingReady = true;
+                websocket.send("ready");
+            }
+        }
+        
+        if (oscNeedsRender && currentTab === 'time') updateOscilloscope();
+        if (fftNeedsRender && currentTab === 'freq') updateFFT();
+        
+        animationId = requestAnimationFrame(renderLoop);
+    }
+    
+    function initCharts() {
+        const elTime = document.getElementById('view-time');
+        const w = elTime.clientWidth - 20, h = elTime.clientHeight - 20;
+        
+        const oscOpts = {
+            width: w, height: h,
+            series: [ {}, { stroke: "#00ffcc", width: 2 } ],
+            axes: [
+                { 
+                    grid: { stroke: "#333" }, 
+                    stroke: "#aaa", 
+                    font: "12px sans-serif", 
+                    values: (u, vals) => vals.map(v => v.toFixed(2) + "s")
+                },
+                { 
+                    grid: { stroke: "#333" }, 
+                    stroke: "#aaa", 
+                    font: "12px sans-serif", 
+                    values: (u, vals) => vals.map(v => v.toFixed(4) + " V") 
+                }
+            ],
+            scales: { x: { time: false }, y: { range: [0, 6.2], auto: false } }
+        };
+        uplotOsc = new uPlot(oscOpts, [[],[]], document.getElementById('oscChart'));
+        
+        const fftOpts = {
+            width: w, height: h,
+            series: [ {}, { stroke: "#ff6384", fill: "rgba(255,99,132,0.4)", width: 2 } ],
+            axes: [
+                { 
+                    grid: { stroke: "#333" }, stroke: "#aaa", font: "12px sans-serif", space: 40,
+                    incrs: [1, 2, 5, 10, 20, 50], values: (u, vals) => vals.map(v => v.toFixed(0) + " Hz") 
+                },
+                { grid: { stroke: "#333" }, stroke: "#aaa", font: "12px sans-serif", values: (u, vals) => vals.map(v => v.toFixed(4) + " V") }
+            ],
+            scales: { x: { time: false, range: [0, 100], auto: false }, y: { range: [0, 3], auto: false } }
+        };
+        uplotFFT = new uPlot(fftOpts, [[],[]], document.getElementById('fftChart'));
+    }
+    
+    function updateOscSettings() {
+        const s = parseFloat(document.getElementById('vScale').value);
+        const o = parseFloat(document.getElementById('vOffset').value);
+        const tBase = parseInt(document.getElementById('tBase').value);
+        
+        if (uplotOsc) {
+            uplotOsc.setScale('y', { min: o, max: o + s });
+            // La escala X se ajusta en updateOscilloscope según datos reales
+            uplotOsc.redraw();
+        }
+        document.getElementById('timeSpanDisplay').innerText = "~" + (tBase/SAMPLE_RATE).toFixed(2) + "s";
+        
+        // Actualizar indicador de sensibilidad
+        const sens = REF_HEIGHT_MM / (s * 1e6);
+        document.getElementById('sensIndicator').innerText = `Sens: ${sens.toFixed(2)} mm/µV`;
+        
+        oscNeedsRender = true;
+        _Z();
+    }
+    
+    function updateFFTSettings() {
+        let val = parseInt(document.getElementById('fftN').value);
+        fftSize = Math.pow(2, Math.round(Math.log(val)/Math.log(2)));
+        document.getElementById('fftN').value = fftSize;
+        document.getElementById('fftNNum').value = fftSize;
+        fftCount = 0;
+        fftNeedsRender = true;
+    }
+    
+    function updateFFTYAxis() {
+        const maxY = parseFloat(document.getElementById('fftYMax').value);
+        if (uplotFFT) {
+            uplotFFT.setScale('y', { min: 0, max: maxY });
+            uplotFFT.redraw();
+        }
+    }
+    
+    function updatePlaybackSpeed() {
+        playbackSpeed = parseFloat(document.getElementById('playbackSpeed').value);
+    }
+    
+    // Slider logarítmico para vScale
+    function setupLogSlider(sliderId, numId, callback) {
+        const slider = document.getElementById(sliderId);
+        const num = document.getElementById(numId);
+        const min = parseFloat(slider.min);
+        const max = parseFloat(slider.max);
+        
+        function sliderToReal(value) {
+            const logMin = Math.log10(min);
+            const logMax = Math.log10(max);
+            const scale = (logMax - logMin) / 100;
+            return Math.pow(10, logMin + scale * value);
+        }
+        
+        function realToSlider(real) {
+            const logMin = Math.log10(min);
+            const logMax = Math.log10(max);
+            const scale = (logMax - logMin) / 100;
+            return (Math.log10(real) - logMin) / scale;
+        }
+        
+        let currentReal = parseFloat(num.value);
+        slider.value = realToSlider(currentReal);
+        
+        slider.addEventListener('input', () => {
+            const real = sliderToReal(slider.value);
+            num.value = real.toExponential(2);
+            callback();
+        });
+        
+        num.addEventListener('change', () => {
+            let val = parseFloat(num.value);
+            if (isNaN(val)) val = min;
+            val = Math.min(max, Math.max(min, val));
+            num.value = val.toExponential(2);
+            slider.value = realToSlider(val);
+            callback();
+        });
+        
+        window.updateVScaleSlider = (newVal) => {
+            newVal = Math.min(max, Math.max(min, newVal));
+            num.value = newVal.toExponential(2);
+            slider.value = realToSlider(newVal);
+            callback();
+        };
+    }
+    
+    function setupDualControl(sliderId, numId, callback) {
+        const slider = document.getElementById(sliderId), num = document.getElementById(numId);
+        slider.addEventListener('input', (e) => { num.value = e.target.value; callback(); });
+        slider.addEventListener('change', callback);
+        num.addEventListener('change', (e) => {
+            let val = parseFloat(e.target.value);
+            slider.value = Math.min(Math.max(val, parseFloat(slider.min)), parseFloat(slider.max));
+            num.value = slider.value;
+            callback();
+        });
+    }
+    
+    function switchTab(tab, btn) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
+        document.getElementById(`view-${tab}`).classList.add('active');
+        
+        document.getElementById('grp-time').style.display = tab === 'time' ? 'block' : 'none';
+        document.getElementById('ctrl-title-time').style.display = tab === 'time' ? 'block' : 'none';
+        document.getElementById('stats-time').style.display = tab === 'time' ? 'block' : 'none';
+        
+        document.getElementById('grp-freq').style.display = tab !== 'time' ? 'block' : 'none';
+        document.getElementById('ctrl-title-freq').style.display = tab !== 'time' ? 'block' : 'none';
+        document.getElementById('stats-freq').style.display = tab !== 'time' ? 'block' : 'none';
+        
+        setTimeout(() => {
+            const el = document.getElementById(`view-${tab}`);
+            const dims = { width: el.clientWidth - 20, height: el.clientHeight - 20 };
+            if(tab === 'time') uplotOsc.setSize(dims);
+            else uplotFFT.setSize(dims);
+        }, 10);
+        if (tab === 'time') oscNeedsRender = true;
+        else if (tab === 'freq') fftNeedsRender = true;
+    }
+    
+    function togglePause() {
+        isPaused = !isPaused;
+        const btn = document.getElementById('statusBtn');
+        btn.innerText = isPaused ? "CONTINUAR" : "DETENER";
+        btn.className = isPaused ? "stopped" : "running";
+        
+        if (isPaused) {
+            if (websocket && websocket.readyState === WebSocket.OPEN) websocket.close();
+            console.log("⏸️ Pausado, WebSocket cerrado");
+        } else {
+            pendingCount = 0; pendingWriteIdx = 0; pendingReadIdx = 0;
+            rollingCount = 0; rollingIdx = 0;
+            fftCount = 0; fftIdx = 0;
+            oscNeedsRender = true; fftNeedsRender = true;
+            awaitingReady = false;
+            _M = false;
+            if (_T) { clearTimeout(_T); _T = null; }
+            initWebSocket();
+            console.log("▶️ Reanudado, reconectando WebSocket");
+        }
+    }
+    
+    // --- Funciones del menú contextual ---
+    function applyChartSpeed(speedMmPerSec) {
+        let newTbase = Math.round(REF_SAMPLES * (REF_SPEED / speedMmPerSec));
+        newTbase = Math.min(10000, Math.max(50, newTbase));
+        document.getElementById('tBase').value = newTbase;
+        document.getElementById('tBaseNum').value = newTbase;
+        updateOscSettings();
+    }
+    
+    function applyAmplifier(ampMmPerUv) {
+        let newVScale = REF_HEIGHT_MM / (ampMmPerUv * 1e6);
+        newVScale = Math.min(7.0, Math.max(0.00005, newVScale));
+        if (window.updateVScaleSlider) {
+            window.updateVScaleSlider(newVScale);
+        } else {
+            document.getElementById('vScale').value = newVScale;
+            document.getElementById('vScaleNum').value = newVScale.toExponential(2);
+        }
+        updateOscSettings();
+    }
+    
+    function closeContextMenu() {
+        contextMenu.style.display = 'none';
+    }
+    
+    function setupContextMenu() {
+        oscChartContainer.addEventListener('contextmenu', (e) => {
+            if (currentTab !== 'time') return;
+            e.preventDefault();
+            
+            contextMenu.style.left = e.clientX + 'px';
+            contextMenu.style.top = e.clientY + 'px';
+            contextMenu.style.display = 'block';
+            
+            setTimeout(() => {
+                window.addEventListener('click', closeContextMenu, { once: true });
+                window.addEventListener('contextmenu', closeContextMenu, { once: true });
+            }, 10);
+        });
+        
+        contextMenu.addEventListener('click', (e) => {
+            const item = e.target.closest('.menu-item');
+            if (!item) return;
+            
+            const action = item.dataset.action;
+            if (action.startsWith('speed-')) {
+                const speed = parseInt(action.split('-')[1]);
+                applyChartSpeed(speed);
+            } else if (action.startsWith('amp-')) {
+                const amp = parseInt(action.split('-')[1]);
+                applyAmplifier(amp);
+            }
+            closeContextMenu();
+        });
+    }
+    
+    window.onload = () => {
+        initCharts();
+        setupDualControl('filterFreq', 'filterFreqNum', recalcFilters);
+        setupLogSlider('vScale', 'vScaleNum', updateOscSettings);
+        setupDualControl('vOffset', 'vOffsetNum', updateOscSettings);
+        setupDualControl('tBase', 'tBaseNum', updateOscSettings);
+        setupDualControl('fftN', 'fftNNum', updateFFTSettings);
+        setupDualControl('fftYMax', 'fftYMaxNum', updateFFTYAxis);
+        setupDualControl('playbackSpeed', 'playbackSpeedNum', updatePlaybackSpeed);
+        recalcFilters();
+        updateOscSettings();
+        updateFFTYAxis();
+        initWebSocket();
+        setupContextMenu();
+        animationId = requestAnimationFrame(renderLoop);
+    };
+    
+    window.addEventListener("resize", () => {
+        const el = document.getElementById(currentTab === 'time' ? 'view-time' : 'view-freq');
+        const dims = { width: el.clientWidth - 20, height: el.clientHeight - 20 };
+        if(currentTab === 'time' && uplotOsc) uplotOsc.setSize(dims);
+        else if(currentTab === 'freq' && uplotFFT) uplotFFT.setSize(dims);
+    });
+</script>
+</body>
+</html>
