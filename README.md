@@ -42,7 +42,7 @@ The system captures brain electrical activity, applies digital filtering (31-tap
 ## Design Highlights
 
 - **Complete system integration**: Analog acquisition + digital processing + wireless communication + web visualization in a single project.
-- **Digital signal processing**: FIR and IIR filters implemented in JavaScript on the ESP32, with configurable low-pass and high-pass modes.
+- **Digital signal processing**: FIR and IIR filters implemented in JavaScript on the client-side, with configurable low-pass and high-pass modes.
 - **Frequency-domain analysis**: Real-time power spectrum computed via FFT.
 - **Wireless data streaming**: WiFi WebSocket server streams EEG data to any browser.
 - **Cross-platform visualization**: Works on PC, tablet, or smartphone without installing any application.
