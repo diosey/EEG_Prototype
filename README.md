@@ -107,12 +107,6 @@ Features:
 
 ---
 
-## License
-
-[Elige una licencia: MIT, GPL, o "All rights reserved" si prefieres no compartirlo]
-
----
-
 ## Author Contact
 - **Gmail:** dioseyadolfolugo@gmail.com
 - **GitHub:** https://github.com/diosey
