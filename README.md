@@ -26,6 +26,7 @@ The system captures brain electrical activity on the ESP32, streams raw 16-bit s
 |-----------|-------|
 | Signal type | Brain electrical activity (EEG) |
 | Channels | 1 |
+|Biopotential amp|G = 10000|
 | Sampling rate | 430 Hz |
 | ADC resolution | 16 bits |
 | Microcontroller | ESP32 |
@@ -41,6 +42,7 @@ The system captures brain electrical activity on the ESP32, streams raw 16-bit s
 
 ## Design Highlights
 
+- **Analog biopotential amplification**: Circuit based on the AD620 due to it's low noise and high CMRR
 - **Complete system integration**: Analog acquisition + digital processing + wireless communication + web visualization in a single project.
 - **Digital signal processing**: FIR and IIR filters implemented in JavaScript on the client-side, with configurable low-pass and high-pass modes.
 - **Frequency-domain analysis**: Real-time power spectrum computed via FFT.
