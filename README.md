@@ -26,7 +26,7 @@ The system captures brain electrical activity, applies digital filtering (31-tap
 |-----------|-------|
 | Signal type | Brain electrical activity (EEG) |
 | Channels | 1 |
-| Sampling rate | 860 Hz |
+| Sampling rate | 430 Hz |
 | ADC resolution | 16 bits |
 | Microcontroller | ESP32 |
 | Digital filters | FIR (31-tap, Hamming) + IIR (1st order) |
