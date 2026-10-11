@@ -12,9 +12,9 @@ Developed as a degree project at Universidad Politécnica Territorial de Aragua 
 This project implements a complete EEG acquisition system composed of:
 
 - **Analog front-end**: Low-noise biopotential acquisition circuit
-- **Digital processing**: ESP32 microcontroller with FIR and IIR digital filters
+- **Digital processing**: ESP32 microcontroller with websockets for communication
 - **Wireless communication**: WiFi for real-time data streaming
-- **Web interface**: Browser-based visualization of EEG signals in time and frequency domains
+- **Web interface**: Browser-based visualization of EEG signals in time and frequency domains with FIR and IIR digital filters
 
 The system captures brain electrical activity, applies digital filtering (31-tap FIR with Hamming window, 1st-order IIR, both with low-pass and high-pass configurations), and streams the processed data wirelessly to any device with a web browser.
 
@@ -53,7 +53,7 @@ The system captures brain electrical activity, applies digital filtering (31-tap
 ## Repository Structure
 
 - `hardware/` — KiCad schematic, PCB, Gerbers, BOM
-- `firmware/` — ESP32 C source code (acquisition, filters, WiFi, DSP)
+- `firmware/` — ESP-IDF source project
 - `docs/` — Design documentation, calculations, thesis summary
 
 ---
